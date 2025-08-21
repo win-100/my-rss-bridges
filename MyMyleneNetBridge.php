@@ -1,6 +1,6 @@
 <?php
 
-class MyleneNetBridge extends BridgeAbstract {
+class MyMyleneNetBridge extends BridgeAbstract {
     const NAME = 'Mylene.net - breves';
     const URI = 'https://www.mylene.net/modules/lesbreves.php';
     const DESCRIPTION = 'Flux RSS des breves publiées sur mylene.net';

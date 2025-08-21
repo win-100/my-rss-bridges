@@ -1,6 +1,6 @@
 <?php
 
-class MediapartBridge extends FeedExpander
+class MyMediapartBridge extends FeedExpander
 {
     const MAINTAINER = 'killruana';
     const NAME = 'Mediapart Bridge';
