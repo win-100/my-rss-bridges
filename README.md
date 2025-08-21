@@ -4,16 +4,15 @@ This file is a custom bridge for [RSS-Bridge](https://github.com/RSS-Bridge/rss-
 
 ## Installation
 
-1. Copy this file to your RSS-Bridge installation directory:
-   ```
-   /var/www/rss-bridge/bridges/
-   ```
-2. Set the correct permissions:
+1. Clone this repository into your home directory:
    ```bash
-   sudo chown rss-bridge:www-data /var/www/rss-bridge/bridges/MyleneNetBridge.php
-   sudo chmod 644 /var/www/rss-bridge/bridges/MyleneNetBridge.php
+   git clone <repo-url> ~/my-rss-bridges
    ```
-3. The bridge should now be available in your RSS-Bridge instance.
+2. Execute the deployment script with sudo to install the bridges:
+   ```bash
+   sudo ~/my-rss-bridges/deploy-rss-bridges.sh
+   ```
+3. The bridge files will be copied to your RSS-Bridge installation directory.
 
 ## Requirements
 - PHP 7.4+
