@@ -4,182 +4,182 @@ class MyInnamoramentoBridge extends BridgeAbstract
     const MAINTAINER = 'vincent+chatgpt';
     const NAME = 'Innamoramento – Fil actu';
     const URI = 'https://www.innamoramento.net/';
-    const DESCRIPTION = 'Récupère les actus (texte + image) depuis la page d’accueil';
-    const CACHE_TIMEOUT = 3600; // 1h
+    const DESCRIPTION = 'Actus depuis la home (supporte cookies login).';
+    const CACHE_TIMEOUT = 600; // 10 min
 
-    const PARAMETERS = [
-        [
-            'limit' => [
-                'name' => 'Nombre d’items',
-                'type' => 'number',
-                'defaultValue' => 10
-            ]
-        ]
-    ];
+    const PARAMETERS = [[
+        'limit' => [
+            'name' => 'Nombre d’items',
+            'type' => 'number',
+            'defaultValue' => 10
+        ],
+        'use_auth' => [
+            'name' => 'Utiliser mes cookies (après login)',
+            'type' => 'checkbox',
+            'defaultValue' => 'unchecked',
+        ],
+        'cookie' => [
+            'name' => 'Cookie (en-tête HTTP complet)',
+            'type' => 'text',
+            'title' => 'Ex: PHPSESSID=...; innakeyy=...; innaid=...; innasess=...',
+        ],
+        'categories' => [
+            'name' => 'Catégories à garder (ex: Actualité,Photos)',
+            'type' => 'text',
+            'defaultValue' => ''
+        ],
+    ]];
 
     public function collectData()
     {
-        $html = getSimpleHTMLDOM(self::URI)
-            or returnServerError('Impossible de charger la page');
+        // mêmes headers que le DIAG v2.2 (stables sur toutes versions)
+        $headers = [
+            'Referer: ' . self::URI,
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language: fr-FR,fr;q=0.9',
+        ];
+        $cookieHeaderRaw = '';
+        if (!empty($this->getInput('use_auth'))) {
+            $cookieHeaderRaw = trim((string)$this->getInput('cookie'));
+            if ($cookieHeaderRaw !== '') {
+                $headers[] = 'Cookie: ' . $cookieHeaderRaw;
+            }
+        }
 
-        // Chaque "actu" est un <li class="actu ..."> dans <ul id="res_contenu">
+        // charge le HTML "brut" puis parse (comme le DIAG qui marche)
+        $raw = getContents(self::URI, $headers);
+        if ($raw === false || $raw === null) {
+            returnServerError('Impossible de charger la page');
+        }
+        $html = str_get_html($raw);
+        if (!$html) {
+            returnServerError('Le HTML n’a pas pu être parsé');
+        }
+
+        // filtre catégories optionnel
+        $catFilter = array_filter(array_map('trim', explode(',', (string)$this->getInput('categories'))));
+        $max = (int)$this->getInput('limit');
+        $count = 0;
+
         foreach ($html->find('section.blockzone ul#res_contenu li.actu') as $li) {
-            // Ignore les messages perso de type "mp"
-            if (strpos($li->class, 'mp') !== false) {
-                continue;
+            $classes = $li->getAttribute('class') ?? '';
+            if (strpos($classes, 'mp') !== false) {
+                continue; // ignore le MP
             }
 
-            $resumeA = $li->find('div.resume-container a.resume', 0);
-            if (!$resumeA) {
-                continue;
-            }
-
-            // Lien principal (absolu)
-            $uri = $this->toAbsolute((string)$resumeA->href);
-
-            // Titre “catégorie” (Actualité / Photos / Anniversaire / Rétrospective…)
-            $titleBadge = $resumeA->find('span.title', 0);
-            $titleLabel = $titleBadge ? trim(html_entity_decode($titleBadge->plaintext, ENT_QUOTES | ENT_HTML5, 'UTF-8')) : '';
-
-            // Ligne infos (souvent "Auteur JJ/MM/AAAA HHhMM" ou juste "JJ/MM/AAAA")
-            $infosSpan = $resumeA->find('span.infos', 0);
-            $infosText = $infosSpan ? trim(html_entity_decode($infosSpan->plaintext, ENT_QUOTES | ENT_HTML5, 'UTF-8')) : '';
-
-            // Texte du résumé (on enlève le titre et les infos de la version “plaintext”)
-            $fullText = trim(html_entity_decode($resumeA->plaintext, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-            if ($titleLabel !== '') {
-                $fullText = trim(str_replace($titleLabel, '', $fullText));
-            }
-            if ($infosText !== '') {
-                $fullText = trim(str_replace($infosText, '', $fullText));
-            }
-
-            // Image : on privilégie le lien du <a class="visuels" href="..."> (grande image)
+            $resumeA = $li->find('a.resume', 0) ?: $li->find('div.resume-container a.resume', 0);
             $visuelA = $li->find('a.visuels', 0);
-            $imageHref = null;
-            $imageThumb = null;
-            if ($visuelA) {
-                if (!empty($visuelA->href)) {
-                    $imageHref = $this->toAbsolute((string)$visuelA->href);
-                }
-                $imgTag = $visuelA->find('img', 0);
-                if ($imgTag && !empty($imgTag->src)) {
-                    $imageThumb = $this->toAbsolute((string)$imgTag->src);
-                }
+            if (!$resumeA && !$visuelA) {
+                continue;
             }
 
-            // Timestamp + auteur depuis $infosText
-            [$timestamp, $author] = $this->parseInfos($infosText);
+            // Titre/catégorie + infos (auteur/date)
+            $titleLabel = '';
+            $infosText = '';
+            if ($resumeA) {
+                $tb = $resumeA->find('span.title', 0);
+                $titleLabel = $tb ? trim(html_entity_decode($tb->plaintext, ENT_QUOTES | ENT_HTML5, 'UTF-8')) : '';
+                $is = $resumeA->find('span.infos', 0);
+                $infosText = $is ? trim(html_entity_decode($is->plaintext, ENT_QUOTES | ENT_HTML5, 'UTF-8')) : '';
+            }
 
-            // Titre final de l’item :
-            // - si titleLabel existe => "Actualité – ..." (texte résumé tronqué)
-            // - sinon => le début du contenu
+            // filtre catégories si demandé
+            if (!empty($catFilter) && $titleLabel !== '') {
+                $ok = false;
+                foreach ($catFilter as $wanted) {
+                    if (mb_strtolower($titleLabel) === mb_strtolower($wanted)) { $ok = true; break; }
+                }
+                if (!$ok) continue;
+            }
+
+            // lien principal
+            $uri = null;
+            if ($resumeA && !empty($resumeA->href)) {
+                $uri = urljoin(self::URI, (string)$resumeA->href);
+            } elseif ($visuelA && !empty($visuelA->href)) {
+                $uri = urljoin(self::URI, (string)$visuelA->href);
+            } else {
+                continue;
+            }
+
+            // texte du résumé (on retire titre + infos)
+            $fullText = '';
+            if ($resumeA) {
+                $fullText = trim(html_entity_decode($resumeA->plaintext, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                if ($titleLabel !== '') $fullText = trim(str_replace($titleLabel, '', $fullText));
+                if ($infosText !== '')  $fullText = trim(str_replace($infosText,  '', $fullText));
+            } else {
+                $fullText = $titleLabel ?: 'Voir le contenu';
+            }
+
+            // image & miniature
+            $imageHref  = ($visuelA && !empty($visuelA->href)) ? urljoin(self::URI, (string)$visuelA->href) : null; // peut être une image OU une page (galerie)
+            $imgTag     = $visuelA ? $visuelA->find('img', 0) : null;
+            $imageThumb = ($imgTag && !empty($imgTag->src)) ? urljoin(self::URI, (string)$imgTag->src) : null;
+
+            // auteur + timestamp
+            [$ts, $author] = $this->parseInfos($infosText);
+
+            // titre final
             $itemTitle = $titleLabel !== '' ? $titleLabel . ' – ' . $this->shorten($fullText, 100) : $this->shorten($fullText, 100);
 
-            // Contenu HTML (inclut l’image si présente)
+            // contenu HTML
             $content = '';
             if ($imageHref) {
-                // Image cliquable vers la grande version
                 $content .= sprintf('<p><a href="%s"><img src="%s" alt=""></a></p>',
-                    htmlspecialchars($imageHref), htmlspecialchars($imageThumb ?: $imageHref)
-                );
+                    htmlspecialchars($imageHref), htmlspecialchars($imageThumb ?: $imageHref));
             } elseif ($imageThumb) {
                 $content .= sprintf('<p><img src="%s" alt=""></p>', htmlspecialchars($imageThumb));
             }
             $content .= '<p>' . htmlspecialchars($fullText) . '</p>';
 
             $item = [
-                'uri'        => $uri,
-                'title'      => $itemTitle,
-                'content'    => $content,
-                'author'     => $author ?: null,
-                'timestamp'  => $timestamp ?: null,
+                'uri'       => $uri,
+                'title'     => $itemTitle,
+                'content'   => $content,
+                'author'    => $author ?: null,
+                'timestamp' => $ts ?: null,
             ];
-
-            if ($imageHref) {
-                // Enclosure pour les lecteurs qui gèrent les médias
+            // enclosure uniquement si href pointe vers une image directe
+            if ($imageHref && preg_match('~\.(jpg|jpeg|png|webp|gif)(\?.*)?$~i', $imageHref)) {
                 $item['enclosures'] = [ $imageHref ];
             }
 
             $this->items[] = $item;
-
-            // Respect du paramètre limit
-            if (count($this->items) >= (int)$this->getInput('limit')) {
-                break;
-            }
+            if (++$count >= $max) break;
         }
-    }
-
-    private function toAbsolute(string $url): string
-    {
-        return urljoin(self::URI, $url);
     }
 
     private function shorten(string $text, int $max): string
     {
-        if (mb_strlen($text) <= $max) {
-            return $text;
-        }
-        return rtrim(mb_substr($text, 0, $max - 1)) . '…';
+        return (mb_strlen($text) <= $max) ? $text : rtrim(mb_substr($text, 0, $max - 1)) . '…';
     }
 
-    /**
-     * Extrait timestamp (Europe/Paris) et auteur depuis la chaîne d’infos.
-     * Exemples d’inputs :
-     *   "le-monde-mf 21/08/2025 11h33"
-     *   "PtitGénie 21/08/2025 09h27"
-     *   "21/08/2025"
-     */
     private function parseInfos(string $infos): array
     {
         $infos = trim($infos);
-        if ($infos === '') {
-            return [null, null];
-        }
+        if ($infos === '') return [null, null];
 
-        $author = null;
-        $timestamp = null;
-
-        // Cherche une date JJ/MM/AAAA + heure optionnelle HHhMM
+        $author = null; $timestamp = null;
         if (preg_match('/(\d{2}\/\d{2}\/\d{4})(?:\s+(\d{2})h(\d{2}))?/', $infos, $m)) {
-            $dateStr = $m[1]; // JJ/MM/AAAA
-            $h = isset($m[2]) ? (int)$m[2] : 0;
-            $min = isset($m[3]) ? (int)$m[3] : 0;
-
-            // Auteur = ce qui précède la date (si présent)
+            $dateStr = $m[1]; $h = isset($m[2]) ? (int)$m[2] : 0; $min = isset($m[3]) ? (int)$m[3] : 0;
             $pos = strpos($infos, $dateStr);
             if ($pos !== false && $pos > 0) {
-                $authorCandidate = trim(mb_substr($infos, 0, $pos));
-                if ($authorCandidate !== '') {
-                    $author = $authorCandidate;
-                }
+                $a = trim(mb_substr($infos, 0, $pos)); if ($a !== '') $author = $a;
             }
-
-            // Crée un timestamp en Europe/Paris
             $tz = new \DateTimeZone('Europe/Paris');
             $dt = \DateTime::createFromFormat('d/m/Y H:i', sprintf('%s %02d:%02d', $dateStr, $h, $min), $tz);
-            if ($dt !== false) {
-                $timestamp = $dt->getTimestamp();
-            }
-        } else {
-            // Parfois, il n’y a que la date
-            if (preg_match('/(\d{2}\/\d{2}\/\d{4})/', $infos, $m)) {
-                $dateStr = $m[1];
-                $tz = new \DateTimeZone('Europe/Paris');
-                $dt = \DateTime::createFromFormat('d/m/Y H:i', $dateStr . ' 00:00', $tz);
-                if ($dt !== false) {
-                    $timestamp = $dt->getTimestamp();
-                }
-                $pos = strpos($infos, $dateStr);
-                if ($pos !== false && $pos > 0) {
-                    $authorCandidate = trim(mb_substr($infos, 0, $pos));
-                    if ($authorCandidate !== '') {
-                        $author = $authorCandidate;
-                    }
-                }
+            if ($dt !== false) $timestamp = $dt->getTimestamp();
+        } elseif (preg_match('/(\d{2}\/\d{2}\/\d{4})/', $infos, $m)) {
+            $dateStr = $m[1];
+            $tz = new \DateTimeZone('Europe/Paris');
+            $dt = \DateTime::createFromFormat('d/m/Y H:i', $dateStr . ' 00:00', $tz);
+            if ($dt !== false) $timestamp = $dt->getTimestamp();
+            $pos = strpos($infos, $dateStr);
+            if ($pos !== false && $pos > 0) {
+                $a = trim(mb_substr($infos, 0, $pos)); if ($a !== '') $author = $a;
             }
         }
-
         return [$timestamp, $author];
     }
 }
