@@ -31,61 +31,54 @@ class MyMediapartBridge extends FeedExpander
     {
         $itemUrl = $item['uri'];
 
-        // On ne traite que les contenus du journal
+        // Ne traiter que les contenus du journal
         if (strpos($itemUrl, self::URI . 'journal/') !== 0) {
             return $item;
         }
 
-        // Lien en mode page unique pour l'utilisateur (option d’affichage)
+        // Lien en mode page unique pour l’affichage utilisateur
         if ($this->getInput('single_page_mode') === true) {
-            // éviter le double "?" si l’URL en contient déjà un
             $item['uri'] .= (str_contains($item['uri'], '?') ? '&' : '?') . 'onglet=full';
         }
 
-        // Si un cookie de session est fourni, tenter d’extraire l’article complet
-        $mpsessid = trim((string)$this->getInput('mpsessid') ?? '');
+        // Essayer de charger l'article complet si un cookie est fourni
+        $mpsessid = trim((string)($this->getInput('mpsessid') ?? ''));
         if ($mpsessid !== '') {
-            $opt = [
+            $opts = [
                 CURLOPT_COOKIE => 'MPSESSID=' . $mpsessid,
-                // Un UA explicite aide parfois à éviter un 403/CDN
-                CURLOPT_USERAGENT => 'Mozilla/5.0 (RSS-Bridge; +https://github.com/RSS-Bridge/rss-bridge)'
+                CURLOPT_USERAGENT => 'Mozilla/5.0 (RSS-Bridge; +https://github.com/RSS-Bridge/rss-bridge)',
             ];
 
+            // Forcer la version "plein texte"
             $pageUrl = $itemUrl . (str_contains($itemUrl, '?') ? '&' : '?') . 'onglet=full';
-            $articlePage = getSimpleHTMLDOM($pageUrl, [], $opt); // wrapper officiel RSS-Bridge :contentReference[oaicite:1]{index=1}
-
-            // Si le fetch échoue, on ne tente pas de parser
-            if (!$articlePage) {
-                return $item;
+            $dom = getSimpleHTMLDOM($pageUrl, [], $opts);
+            if (!$dom) {
+                return $item; // Échec du chargement : garder le résumé du flux
             }
 
-            // Sélecteurs de repli : le DOM de Mediapart varie selon le type d’article/abonnement
+            // Sélecteurs possibles selon le gabarit
             $selectors = [
                 'div.content-article',
                 'div.article-content',
                 'article .content-article',
                 'article .article-body',
-                'div#article .content'
+                'div#article .content',
             ];
 
             $node = null;
             foreach ($selectors as $sel) {
-                $node = $articlePage->find($sel, 0);
+                $node = $dom->find($sel, 0);
                 if ($node && trim((string)$node->innertext) !== '') {
                     break;
                 }
             }
 
-            // Si rien de probant trouvé, on évite sanitize('') qui lève l’Exception
+            // Si on a trouvé du contenu exploitable, remplacer le teaser par l'article complet
             if ($node && trim((string)$node->innertext) !== '') {
-                $content = (string)$node->innertext;
-
-                // Nettoyage + réécriture des liens vers URI de base
-                $content = sanitize($content);                   // ne pas appeler sur chaîne vide
-                $content = defaultLinkTo($content, static::URI);
-
-                // Concaténer proprement même si 'content' est absent
-                $item['content'] = ($item['content'] ?? '') . $content;
+                $html = (string)$node->innertext;
+                $html = sanitize($html);
+                $html = defaultLinkTo($html, static::URI);
+                $item['content'] = $html;
             }
         }
 

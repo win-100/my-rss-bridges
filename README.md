@@ -12,7 +12,11 @@ This file is a custom bridge for [RSS-Bridge](https://github.com/RSS-Bridge/rss-
    ```bash
    git clone https://github.com/win-100/my-rss-bridges.git ~/my-rss-bridges
    ```
-3. Run the deployment script (still as rss-bridge) to install the bridges:
+3. Give permission to execute the deployment script:
+   ```bash
+   chmod u+x ~/my-rss-bridges/deploy-rss-bridges.sh
+   ```
+4. Run the deployment script (still as rss-bridge) to install the bridges:
    ```bash
    ~/my-rss-bridges/deploy-rss-bridges.sh
    ```
