@@ -53,16 +53,19 @@ class MyMediapartBridge extends FeedExpander
             $pageUrl = $itemUrl . (str_contains($itemUrl, '?') ? '&' : '?') . 'onglet=full';
             $dom = getSimpleHTMLDOM($pageUrl, [], $opts);
             if (!$dom) {
-                return $item; // Échec du chargement : garder le résumé du flux
+                return $item; // échec : garder le résumé
             }
 
-            // Sélecteurs possibles selon le gabarit
+            // Nouveaux gabarits Mediapart (selon ton extrait)
             $selectors = [
+                'div.news__body__center__article.news__rich-text-content',
+                'div.news__rich-text-content',
+                'div.paywall-restricted-content.qiota_reserve',
+                'main#main .news__rich-text-content',
+                // anciens fallback :
                 'div.content-article',
                 'div.article-content',
-                'article .content-article',
                 'article .article-body',
-                'div#article .content',
             ];
 
             $node = null;
@@ -73,11 +76,12 @@ class MyMediapartBridge extends FeedExpander
                 }
             }
 
-            // Si on a trouvé du contenu exploitable, remplacer le teaser par l'article complet
             if ($node && trim((string)$node->innertext) !== '') {
                 $html = (string)$node->innertext;
                 $html = sanitize($html);
-                $html = defaultLinkTo($html, static::URI);
+                // Base = URL de l'article (meilleure réécriture des liens relatifs)
+                $html = defaultLinkTo($html, $itemUrl);
+                // Remplacer le teaser par l’article complet
                 $item['content'] = $html;
             }
         }
