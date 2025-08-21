@@ -1,30 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Répertoire du dépôt perso (dans ~ de l'utilisateur appelant sudo)
-REPO_DIR="$HOME/my-rss-bridges"
-# Répertoire cible de RSS-Bridge
-TARGET_DIR="/var/www/rss-bridge/bridges"
-# Utilisateur/groupe cible
-OWNER="rss-bridge:www-data"
+# Dossiers (modifiables via variables d'env si besoin)
+REPO_DIR="${REPO_DIR:-$HOME/my-rss-bridges}"
+TARGET_DIR="${TARGET_DIR:-/var/www/rss-bridge/bridges}"
 
-# Vérifs
+# Vérifs minimales
 [[ -d "$REPO_DIR" ]]   || { echo "Dépôt introuvable: $REPO_DIR" >&2; exit 1; }
 [[ -d "$TARGET_DIR" ]] || { echo "Dossier cible introuvable: $TARGET_DIR" >&2; exit 1; }
+[[ -w "$TARGET_DIR" ]] || { echo "Pas d'écriture sur: $TARGET_DIR (utilisateur: $(id -un))" >&2; exit 1; }
 
 echo "Déploiement des bridges de $REPO_DIR vers $TARGET_DIR ..."
+count=0
 
-# Boucle sur tous les fichiers *Bridge.php du repo
+shopt -s nullglob
 for src in "$REPO_DIR"/*Bridge.php; do
-    [[ -e "$src" ]] || continue
-    base="$(basename "$src")"
-    dst="$TARGET_DIR/$base"
-
-    ln -sfn "$src" "$dst"
-    chown -h "$OWNER" "$dst"
-    echo "  ✓ $base"
+  base="$(basename "$src")"
+  ln -sfn "$src" "$TARGET_DIR/$base"
+  echo "  ✓ $base"
+  ((count++))
 done
+shopt -u nullglob
 
+[[ $count -gt 0 ]] || echo "Aucun fichier *Bridge.php trouvé dans $REPO_DIR"
 echo "Déploiement terminé ✅"
 
 exit 0

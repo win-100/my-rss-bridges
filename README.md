@@ -4,20 +4,19 @@ This file is a custom bridge for [RSS-Bridge](https://github.com/RSS-Bridge/rss-
 
 ## Installation
 
-1. Clone this repository into your home directory:
+1. Log into your server (via SSH), then open a shell as the `rss-bridge` user:
    ```bash
-   git clone <repo-url> ~/my-rss-bridges
+   sudo yunohost app shell rss-bridge
    ```
-2. Execute the deployment script with sudo to install the bridges:
+2. Clone this repository into the rss-bridge home directory:
    ```bash
-   sudo ~/my-rss-bridges/deploy-rss-bridges.sh
+   git clone https://github.com/win-100/my-rss-bridges.git ~/my-rss-bridges
    ```
-3. The bridge files will be copied to your RSS-Bridge installation directory.
-
-## Requirements
-- PHP 7.4+
-- RSS-Bridge installed and configured
-- Proper permissions set as shown above
+3. Run the deployment script (still as rss-bridge) to install the bridges:
+   ```bash
+   ~/my-rss-bridges/deploy-rss-bridges.sh
+   ```
+   This script will symlink the bridge files into your RSS-Bridge installation directory (usually /var/www/rss-bridge/bridges/).
 
 ## Usage
-Access this bridge through your RSS-Bridge web interface or directly via URL parameters.
+Once deployed, your custom bridges will be accessible through the RSS-Bridge web interface or directly via URL parameters.
