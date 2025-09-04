@@ -27,6 +27,16 @@ class MyMediapartBridge extends FeedExpander
         $this->collectExpandableDatas($url);
     }
 
+    protected function parseItemFromFeed($feedItem)
+    {
+        $item = $this->parseFeedItem($feedItem);  // parse existing fields
+        $dc = $feedItem->get_item_tags('http://purl.org/dc/elements/1.1/', 'creator');
+        if ($dc && isset($dc[0]['data'])) {
+            $item['author'] = trim($dc[0]['data']);  // expose author
+        }
+        return $item;
+    }
+
     protected function parseItem(array $item)
     {
         $itemUrl = $item['uri'];
