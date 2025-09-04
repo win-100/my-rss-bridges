@@ -27,8 +27,20 @@ class MyMediapartBridge extends FeedExpander
         $this->collectExpandableDatas($url);
     }
 
-    protected function parseItem(array $item)
+    protected function parseItem($item)
     {
+        $author = null;
+        $authorTags = $item->get_item_tags('http://purl.org/dc/elements/1.1/', 'creator');
+        if (!empty($authorTags) && isset($authorTags[0]['data'])) {
+            $author = $authorTags[0]['data'];
+        }
+
+        $item = parent::parseItem($item);
+
+        if ($author !== null) {
+            $item['author'] = $author;
+        }
+
         $itemUrl = $item['uri'];
 
         // Ne traiter que les contenus du journal
