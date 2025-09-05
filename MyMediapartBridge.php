@@ -72,6 +72,10 @@ class MyMediapartBridge extends FeedExpander
             foreach ($selectors as $sel) {
                 $node = $dom->find($sel, 0);
                 if ($node && trim((string)$node->innertext) !== '') {
+                    // Nettoyer les spans screen-reader-only
+                    foreach ($node->find('span.screen-reader-only') as $sr) {
+                        $sr->outertext = '';
+                    }
                     break;
                 }
             }
