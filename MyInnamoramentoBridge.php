@@ -23,8 +23,13 @@ class MyInnamoramentoBridge extends BridgeAbstract
             'type' => 'text',
             'title' => 'Ex: PHPSESSID=...; innakeyy=...; innaid=...; innasess=...',
         ],
-        'categories' => [
-            'name' => 'Catégories à garder (ex: Actualité,Photos)',
+        'include_categories' => [
+            'name' => 'Catégories à garder (ex: Anecdote,Actualité) (prioritaire sur exclusion)',
+            'type' => 'text',
+            'defaultValue' => ''
+        ],
+        'exclude_categories' => [
+            'name' => 'Catégories à exclure (ex: Anniversaie,Photo du jour) (ignoré si inclusion utilisée)',
             'type' => 'text',
             'defaultValue' => ''
         ],
@@ -57,7 +62,8 @@ class MyInnamoramentoBridge extends BridgeAbstract
         }
 
         // filtre catégories optionnel
-        $catFilter = array_filter(array_map('trim', explode(',', (string)$this->getInput('categories'))));
+        $includecatFilter = array_filter(array_map('trim', explode(',', (string)$this->getInput('include_categories'))));
+        $excludecatFilter = array_filter(array_map('trim', explode(',', (string)$this->getInput('exclude_categories'))));
         $max = (int)$this->getInput('limit');
         $count = 0;
 
@@ -79,17 +85,34 @@ class MyInnamoramentoBridge extends BridgeAbstract
             if ($resumeA) {
                 $tb = $resumeA->find('span.title', 0);
                 $titleLabel = $tb ? trim(html_entity_decode($tb->plaintext, ENT_QUOTES | ENT_HTML5, 'UTF-8')) : '';
+                // catégorie = ce qui est avant " - " dans le titre (ou vide)
+                $cat = '';
+                if (strpos($titleLabel, ' - ') !== false) {
+                    $cat = mb_substr($titleLabel, 0, mb_strpos($titleLabel, ' - '));
+                }
                 $is = $resumeA->find('span.infos', 0);
                 $infosText = $is ? trim(html_entity_decode($is->plaintext, ENT_QUOTES | ENT_HTML5, 'UTF-8')) : '';
             }
 
-            // filtre catégories si demandé
-            if (!empty($catFilter) && $titleLabel !== '') {
-                $ok = false;
-                foreach ($catFilter as $wanted) {
-                    if (mb_strtolower($titleLabel) === mb_strtolower($wanted)) { $ok = true; break; }
+            // filtre include_categories si demandé
+            $ok=true;
+            if (!empty($cat) && $titleLabel !== '') {
+                if (!empty($includecatFilter)) {
+                    $ok = false;
+                    foreach ($includecatFilter as $wanted) {
+                        if (mb_strtolower($cat) === mb_strtolower($wanted)) { $ok = true; break; }
+                    }
                 }
-                if (!$ok) continue;
+                else {
+                    if (!empty($excludecatFilter)) {
+                        foreach ($excludecatFilter as $unwanted) {
+                            if (mb_strtolower($cat) === mb_strtolower($unwanted)) { $ok = false; break; }
+                        }
+                    }
+                }
+            }
+            if (!$ok) {
+                continue;
             }
 
             // lien principal
