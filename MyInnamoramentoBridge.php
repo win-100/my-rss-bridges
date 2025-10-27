@@ -29,7 +29,7 @@ class MyInnamoramentoBridge extends BridgeAbstract
             'defaultValue' => ''
         ],
         'exclude_categories' => [
-            'name' => 'Catégories à exclure (ex: Anniversaie,Photo du jour) (ignoré si inclusion utilisée)',
+            'name' => 'Catégories à exclure (ex: Anniversaire,Photo du jour) (ignoré si inclusion utilisée)',
             'type' => 'text',
             'defaultValue' => ''
         ],
@@ -96,7 +96,7 @@ class MyInnamoramentoBridge extends BridgeAbstract
 
             // filtre include_categories si demandé
             $ok=true;
-            if (!empty($cat) && $titleLabel !== '') {
+            if ($cat !== '' && $titleLabel !== '') {
                 if (!empty($includecatFilter)) {
                     $ok = false;
                     foreach ($includecatFilter as $wanted) {
