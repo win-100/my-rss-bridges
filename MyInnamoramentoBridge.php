@@ -96,7 +96,7 @@ class MyInnamoramentoBridge extends BridgeAbstract
 
             // filtre include_categories si demandé
             $ok=true;
-            if ($cat !== '' && $titleLabel !== '') {
+            /*if ($cat !== '' && $titleLabel !== '') {
                 if (!empty($includecatFilter)) {
                     $ok = false;
                     foreach ($includecatFilter as $wanted) {
@@ -110,7 +110,7 @@ class MyInnamoramentoBridge extends BridgeAbstract
                         }
                     }
                 }
-            }
+            }*/
             if (!$ok) {
                 continue;
             }
