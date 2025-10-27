@@ -34,7 +34,7 @@ class MyMyleneNetBridge extends BridgeAbstract {
     
             $item = [];
             $title = trim($tweetWrapper->find('div.tweet_title', 0)?->plaintext ?? '');
-            $item['title'] = htmlspecialchars($title);
+            $item['title'] = $title;
             $item['author'] = htmlspecialchars(str_replace('Par ', '', $author));
             $item['uri'] = self::URI . '#b-' . md5($dateRaw . $author . $content);
             $item['timestamp'] = $timestamp;
