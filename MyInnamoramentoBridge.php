@@ -85,6 +85,7 @@ class MyInnamoramentoBridge extends BridgeAbstract
             if ($resumeA) {
                 $tb = $resumeA->find('span.title', 0);
                 $titleLabel = $tb ? trim(html_entity_decode($tb->plaintext, ENT_QUOTES | ENT_HTML5, 'UTF-8')) : '';
+                $titleLabel = str_replace('–', '-', $titleLabel); //normalise le tiret
                 // catégorie = ce qui est avant " - " dans le titre (ou vide)
                 $cat = '';
                 if (strpos($titleLabel, ' - ') !== false) {
