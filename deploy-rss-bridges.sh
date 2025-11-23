@@ -18,7 +18,7 @@ for src in "$REPO_DIR"/*Bridge.php; do
   base="$(basename "$src")"
   ln -sfn "$src" "$TARGET_DIR/$base"
   echo "  ✓ $base"
-  ((count++))
+  count=$((count + 1))
 done
 shopt -u nullglob
 
