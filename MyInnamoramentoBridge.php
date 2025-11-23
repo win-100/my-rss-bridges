@@ -82,15 +82,23 @@ class MyInnamoramentoBridge extends BridgeAbstract
             // Titre/catégorie + infos (auteur/date)
             $titleLabel = '';
             $infosText = '';
+            $cat = '';
+            
             if ($resumeA) {
                 $tb = $resumeA->find('span.title', 0);
                 $titleLabel = $tb ? trim(html_entity_decode($tb->plaintext, ENT_QUOTES | ENT_HTML5, 'UTF-8')) : '';
-                $titleLabel = str_replace('–', '-', $titleLabel); //normalise le tiret
-                // catégorie = ce qui est avant " - " dans le titre (ou vide)
-                $cat = '';
-                if (strpos($titleLabel, ' - ') !== false) {
-                    $cat = mb_substr($titleLabel, 0, mb_strpos($titleLabel, ' - '));
+
+                // normalise les tirets et espaces (NBSP, NNBSP…)
+                $titleLabel = str_replace(["–", "—"], "-", $titleLabel);
+                $titleLabel = preg_replace('/[\x{00A0}\x{202F}]/u', ' ', $titleLabel); // NBSP -> space
+                $titleLabel = preg_replace('/\s+/u', ' ', $titleLabel); // espaces multiples -> 1 espace
+                $titleLabel = trim($titleLabel);
+                
+                // catégorie = avant le 1er tiret (tolérant aux espaces)
+                if (preg_match('/^(.+?)\s*-\s*/u', $titleLabel, $m)) {
+                    $cat = trim($m[1]);
                 }
+                
                 $is = $resumeA->find('span.infos', 0);
                 $infosText = $is ? trim(html_entity_decode($is->plaintext, ENT_QUOTES | ENT_HTML5, 'UTF-8')) : '';
             }
