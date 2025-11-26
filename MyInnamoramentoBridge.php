@@ -62,8 +62,20 @@ class MyInnamoramentoBridge extends BridgeAbstract
         }
 
         // filtre catégories optionnel
-        $includecatFilter = array_filter(array_map('trim', explode(',', (string)$this->getInput('include_categories'))));
-        $excludecatFilter = array_filter(array_map('trim', explode(',', (string)$this->getInput('exclude_categories'))));
+        $normalizeCategoryList = function(string $raw): array {
+            $entries = [];
+            foreach (explode(',', $raw) as $entry) {
+                $entry = str_replace('+', ' ', $entry);
+                $entry = preg_replace('/\s+/u', ' ', $entry);
+                $entry = trim($entry);
+                if ($entry !== '') {
+                    $entries[] = $entry;
+                }
+            }
+            return $entries;
+        };
+        $includecatFilter = $normalizeCategoryList((string)$this->getInput('include_categories'));
+        $excludecatFilter = $normalizeCategoryList((string)$this->getInput('exclude_categories'));
         $max = (int)$this->getInput('limit');
         $count = 0;
 
@@ -95,7 +107,7 @@ class MyInnamoramentoBridge extends BridgeAbstract
                 $titleLabel = trim($titleLabel);
                 
                 // catégorie = avant le 1er tiret (tolérant aux espaces)
-                if (preg_match('/^(.+?)\s*-\s*/u', $titleLabel, $m)) {
+                if (preg_match('/^(.+?)\s*[–—-]\s*/u', $titleLabel, $m)) {
                     $cat = trim($m[1]);
                 }
                 
